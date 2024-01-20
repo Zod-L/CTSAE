@@ -566,7 +566,7 @@ class encoder(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.trans_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 
-        # Latent output
+        # Latent output13
         self.last_pool = 4
         self.trans_norm = nn.LayerNorm(embed_dim)
         self.trans_cls_head = nn.Linear(embed_dim, decode_embed)

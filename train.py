@@ -231,7 +231,8 @@ def main(args):
         print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)}")
         print(f"Number of decoder parameters: {sum(p.numel() for p in model.decoder.parameters() if p.requires_grad)}")
 
-    model.to(device)
+
+    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
 
     model_ema = None
     if args.model_ema:
@@ -266,9 +267,11 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
+
         # pdb.set_trace()
         if 'model' in checkpoint.keys():
             model_without_ddp.load_state_dict(checkpoint['model'])
+
         else:
             model_without_ddp.load_state_dict(checkpoint)
         if 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:

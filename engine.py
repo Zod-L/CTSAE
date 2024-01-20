@@ -33,7 +33,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         msk = msk.to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
-            print(msk_im.shape)
             _, outputs = model(msk_im)
             if isinstance(outputs, list):
                 loss_list = [criterion(o, targets) / len(outputs) for o in outputs]
