@@ -5,12 +5,11 @@ from data import *
 from tqdm import tqdm
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from timm.models import create_model
-from models import all_attn_cnn_split
+from models import cls_attn_cnn_split224_4branch
 
 device = "cuda:4"
-model = all_attn_cnn_split()
-model.load_state_dict(torch.load("output/cls_attn_cnn_concat/checkpoint_280.pth")["model"])
+model = cls_attn_cnn_split224_4branch()
+model.load_state_dict(torch.load("output/cls_attn_cnn_split224_4branch/checkpoint_100.pth")["model"])
 model = model.to(device)
 
 dataset = four_scale_dataset_with_fname("../gravityspy/processed/", 0)
@@ -41,6 +40,6 @@ with torch.no_grad():
             _pred = torch.cat([pred[i:i+1, 3*j : 3*(j+1), ...] for j in range(C // 3)], 0)
             res = torch.cat([_im.cpu(), _pred.cpu()], dim=0)
             np.save(os.path.join("test", fname.split("/")[-2],fname.split("/")[-1]), latent[i:i+1, ...].detach().cpu().numpy())
-            save_image(res, os.path.join("test_im", fname.split("/")[-2],fname.split("/")[-1]), normalize=True, value_range=(-1, 1), nrow=4)
+            # save_image(res, os.path.join("test_im", fname.split("/")[-2],fname.split("/")[-1]), normalize=True, value_range=(-1, 1), nrow=4)
     
     

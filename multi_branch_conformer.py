@@ -512,7 +512,9 @@ class encoder(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         assert depth % 3 == 0
 
+        num_patches = ((im_size // patch_size) ** 2) * 4
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.trans_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 
         # Latent output
@@ -598,6 +600,7 @@ class encoder(nn.Module):
             )
         self.fin_stage = fin_stage
 
+        trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
 
         self.apply(self._init_weights)
@@ -627,6 +630,7 @@ class encoder(nn.Module):
     def forward(self, x):
         B = x.shape[0]
         cls_tokens = self.cls_token.expand(B, -1, -1)
+        pos_embed = self.pos_embed.repeat(B, 1, 1)
         
 
         # pdb.set_trace()
@@ -647,7 +651,9 @@ class encoder(nn.Module):
             x_t.append(getattr(self, f"trans_patch_conv_{i}")(x_base[:, i*cpb : i*cpb + cpb, :, :]).flatten(2).transpose(1, 2))
         
         x_t = torch.cat([cls_tokens] + x_t, dim=1)
+        x_t = x_t + pos_embed
         x_t = self.trans_1(x_t)
+
     
         # 2 ~ final 
         for i in range(2, self.fin_stage):
@@ -682,9 +688,12 @@ class decoder(nn.Module):
 
         self.trans_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 
+
+        num_patches = ((im_size // patch_size) ** 2) * 4
         self.patch_size = patch_size
         self.im_size = im_size
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
 
 
         # Latent to map
@@ -781,7 +790,8 @@ class decoder(nn.Module):
         
 
 
-        
+        trunc_normal_(self.pos_embed, std=.02)
+        trunc_normal_(self.cls_token, std=.02)
 
 
         self.apply(self._init_weights)
@@ -811,6 +821,7 @@ class decoder(nn.Module):
     def forward(self, x):
         B, _ = x.shape
         cls_tokens = self.cls_token.expand(B, -1, -1)
+        pos_embed = self.pos_embed.repeat(B, 1, 1)
         x = self.first_fc(x).reshape(B, -1, (self.im_size // (16 * self.first_up_scale)), (self.im_size // (16 * self.first_up_scale)))
 
         xs = []
@@ -824,6 +835,7 @@ class decoder(nn.Module):
         for i in range(self.num_branch):
             xt.append(getattr(self, f"trans_patch_conv_{i}")(x[:, i*cpb : i*cpb + cpb, :, :]).flatten(2).transpose(1, 2))
         xt = torch.cat([cls_tokens] + xt, 1)
+        xt = xt + pos_embed
 
         # 1 ~ final 
         for i in range(self.fin_stage):

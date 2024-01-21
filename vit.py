@@ -167,7 +167,7 @@ class encoder(nn.Module):
     
         # 1 ~ final 
         for i in range(1, 13):
-            x_t = eval('self.trans_' + str(i))(x_t + pos_embed)
+            x_t = eval('self.trans_' + str(i))(x_t)
 
 
 
@@ -215,7 +215,13 @@ class decoder(nn.Module):
             setattr(self, f"last_fc_{i}", nn.Linear(embed_dim, patch_size**2 * 3, bias=True))
 
 
+
         self.apply(self._init_weights)
+
+        trunc_normal_(self.pos_embed, std=.02)
+        trunc_normal_(self.cls_token, std=.02)
+
+
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
