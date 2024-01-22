@@ -1,6 +1,6 @@
-from models import cls_attn_cnn_split224_4branch
+from models import auto_encoder_multi_cnn_attn
 import torch
-model = cls_attn_cnn_split224_4branch()
+model = auto_encoder_multi_cnn_attn()
 
 # # total = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
 
@@ -18,14 +18,14 @@ model = cls_attn_cnn_split224_4branch()
 
 
 
-# x = torch.zeros((8, 12, 224, 224))
-# latent, pred = model(x)
-# print(latent.shape)
-# print(pred.shape)
+x = torch.zeros((8, 12, 224, 224))
+latent, pred = model(x)
+print(latent.shape)
+print(pred.shape)
 
 
-print(sum(p.numel() for p in model.encoder.parameters() if p.requires_grad))
-print(sum(p.numel() for p in model.decoder.parameters() if p.requires_grad))
+# print(sum(p.numel() for p in model.encoder.parameters() if p.requires_grad))
+# print(sum(p.numel() for p in model.decoder.parameters() if p.requires_grad))
 
 
 # print(sum(p.numel() for e in model.encoder for p in e.parameters() if p.requires_grad))

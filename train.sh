@@ -15,7 +15,7 @@ python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_nod
                                    --data-path ../gravityspy/processed/ \
                                    --output_dir ${OUTPUT} \
                                    --epochs 201 \
-                                   --save_freq 20 \
+                                   --save_freq  \
 
 
 
