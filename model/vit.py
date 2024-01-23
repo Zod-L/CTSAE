@@ -55,22 +55,32 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6)):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), branch=4):
         super().__init__()
-        self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        for i in range(branch):
+            setattr(self, f"norm1_{i}", norm_layer(dim))
+        self.branch = branch
+        for i in range(branch):
+            setattr(self, f"attn_{i}", Attention(
+                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop))
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
+        for i in range(branch):
+            setattr(self, f"norm2_{i}", norm_layer(dim))
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        for i in range(branch):
+            setattr(self, f"mlp_{i}", Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop))
 
     def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        xs = []
+        spb = (x.shape[1] - 1) // self.branch
+        for i in range(self.branch):
+            _x = torch.cat([x[:, 0:1, :], x[:, 1+spb*i:1+spb*i+spb, :]], 1)
+            _x = _x + self.drop_path(getattr(self, f"attn_{i}")(getattr(self, f"norm1_{i}")(_x)))
+            _x = _x + self.drop_path(getattr(self, f"mlp_{i}")(getattr(self, f"norm2_{i}")(_x)))
+            xs.append(_x[:, 1:, :])
+        x = torch.cat([x[:, 0:1, :]] + xs, 1)
         return x
-
 
 
 
@@ -89,7 +99,7 @@ class encoder(nn.Module):
 
     def __init__(self, patch_size=16, decode_embed=1000,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=True):
 
         # Transformer
         super().__init__()
@@ -104,7 +114,8 @@ class encoder(nn.Module):
 
         # Latent output13
         self.trans_norm = nn.LayerNorm(embed_dim)
-        self.trans_cls_head = nn.Linear(embed_dim, decode_embed)
+        self.mean_head = nn.Linear(embed_dim, decode_embed)
+        self.var_head = nn.Linear(embed_dim, decode_embed) if use_vae else None
 
         for i in range(4):
             setattr(self, f"trans_patch_conv_{i}", nn.Conv2d(3, embed_dim, kernel_size=patch_size, stride=patch_size, padding=0))
@@ -120,6 +131,7 @@ class encoder(nn.Module):
                     Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
                              qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=self.trans_dpr[i-1])
             )
+
 
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -174,8 +186,9 @@ class encoder(nn.Module):
 
         # trans classification
         x_t = self.trans_norm(x_t)
-        tran_latent = self.trans_cls_head(x_t)
-        return tran_latent
+        mu = self.mean_head(x_t)
+        var = self.var_head(x_t) if self.var_head else None
+        return mu, var
     
 
 
@@ -302,24 +315,32 @@ class auto_encoder_vit(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, **kwargs):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=True, **kwargs):
         
         super().__init__()
         
         self.encoder = encoder(patch_size=patch_size, decode_embed=decode_embed,  
                                embed_dim=embed_dim, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
-                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size)
+                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, use_vae=use_vae)
         self.decoder = decoder(patch_size=patch_size, 
                               embed_dim=decode_embed, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
                                attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size)
 
-
+    def sample(self, mu, log_var):
+        if log_var is not None:
+            var = torch.exp(0.5 * log_var)
+            z = torch.randn_like(mu)
+            z = var * z + mu
+        else:
+            z = mu
+        return z
 
 
     def forward(self, x):
-        latent  = self.encoder(x)
+        mu, var  = self.encoder(x)
+        latent = self.sample(mu, var)
         pred = self.decoder(latent)
-        return latent, pred
+        return pred, mu, var
         

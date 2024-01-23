@@ -515,7 +515,7 @@ class encoder(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=1000, base_channel=64, channel_ratio=4, num_med_block=0,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, num_branch=4):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, num_branch=4, use_vae=True):
 
         # Transformer
         super().__init__()
@@ -534,7 +534,8 @@ class encoder(nn.Module):
         self.trans_cls_head = nn.Linear(embed_dim, decode_embed)
         self.pooling = nn.AdaptiveAvgPool2d(self.last_pool)
         self.conv_cls_head = nn.Linear(int(num_branch * base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
-        self.last_head = nn.Linear(2 * decode_embed, decode_embed)
+        self.mean_head = nn.Linear(2 * decode_embed, decode_embed)
+        self.var_head = nn.Linear(2 * decode_embed, decode_embed) if use_vae else None
 
         # Stem stage: get the feature maps by conv block (copied form resnet.py)
         self.num_branch = num_branch
@@ -677,8 +678,9 @@ class encoder(nn.Module):
         # trans classification
         x_t = self.trans_norm(x_t)
         tran_latent = self.trans_cls_head(x_t[:, 0])
-        fuse_latent = self.last_head(torch.cat([conv_latent, tran_latent], 1))
-        return fuse_latent
+        mu = self.mean_head(torch.cat([conv_latent, tran_latent], 1))
+        var = self.var_head(torch.cat([conv_latent, tran_latent], 1)) if self.var_head else None
+        return mu, var
     
 
 
@@ -897,14 +899,14 @@ class auto_encoder_multi_cnn_attn(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384, base_channel=64, channel_ratio=4, num_med_block=0,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, first_up=2, num_branch=4, **kwargs):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, first_up=2, num_branch=4, use_vae=True, **kwargs):
         
         super().__init__()
         
         self.encoder = encoder(patch_size=patch_size, in_chans=in_chans, decode_embed=decode_embed, base_channel=base_channel, 
                                channel_ratio=channel_ratio, num_med_block=num_med_block,embed_dim=embed_dim, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
-                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, num_branch=num_branch)
+                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, num_branch=num_branch, use_vae=use_vae)
         self.decoder = decoder(patch_size=patch_size, base_channel=base_channel, 
                                channel_ratio=channel_ratio, num_med_block=num_med_block,embed_dim=decode_embed, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
@@ -912,9 +914,19 @@ class auto_encoder_multi_cnn_attn(nn.Module):
 
 
 
+    def sample(self, mu, log_var):
+        if log_var is not None:
+            var = torch.exp(0.5 * log_var)
+            z = torch.randn_like(mu)
+            z = var * z + mu
+        else:
+            z = mu
+        return z
+
 
     def forward(self, x):
-        latent  = self.encoder(x)
+        mu, var  = self.encoder(x)
+        latent = self.sample(mu, var)
         pred = self.decoder(latent)
-        return latent, pred
+        return pred, mu, var
         

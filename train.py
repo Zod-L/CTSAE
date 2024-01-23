@@ -317,7 +317,7 @@ def main(args):
                 im = torch.cat([dataset_train[i][1].unsqueeze(0) for i in test_samples], dim=0).to(global_rank)
                 N, C, H, W = im.shape
                 thresh_im = torch.cat([dataset_train[i][0].unsqueeze(0) for i in test_samples], dim=0).to(global_rank)
-                _, pred = model(thresh_im)
+                pred, _, _ = model(thresh_im)
                 im = torch.cat([im[:, 3*i : 3*(i+1), ...] for i in range(C // 3)], 0)
                 thresh_im = torch.cat([thresh_im[:, 3*i : 3*(i+1), ...] for i in range(C // 3)], 0)
                 pred = torch.cat([pred[:, 3*i : 3*(i+1), ...] for i in range(C // 3)], 0)

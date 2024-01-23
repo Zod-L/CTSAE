@@ -4,12 +4,12 @@ from functools import partial
 
 # from timm.models.vision_transformer import VisionTransformer, _cfg
 
-from vision_transformer import VisionTransformer, _cfg
+from model.vision_transformer import VisionTransformer, _cfg
 from conformer import Conformer, auto_encoder
-from multi_branch_conformer import auto_encoder_multi_branch
-from cnn import auto_encoder_cnn
-from vit import auto_encoder_vit
-from multi_cnn_attn_conformer import auto_encoder_multi_cnn_attn
+from model.multi_branch_conformer import auto_encoder_multi_branch
+from model.cnn import auto_encoder_cnn
+from model.vit import auto_encoder_vit
+from model.multi_cnn_attn_conformer import auto_encoder_multi_cnn_attn
 from timm.models.registry import register_model
 
 
@@ -169,9 +169,9 @@ def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
 
 
 @register_model
-def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
+def cls_attn_cnn_split224_4cnn_attn(pretrained=False, **kwargs):
     model = auto_encoder_multi_cnn_attn(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
-                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, **kwargs)
+                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=True, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model

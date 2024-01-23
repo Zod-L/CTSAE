@@ -12,12 +12,17 @@ from timm.utils import accuracy, ModelEma
 
 import utils
 from torchvision.utils import save_image
+import torch.nn.functional as F
+
+def kl_loss(mu, log_var):
+    res = (-0.5 * log_var + (mu ** 2 + log_var.exp()) / 2)
+    return res.mean()
 
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
-                    model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None,
+                    model_ema: Optional[ModelEma] = None, mixcup_fn: Optional[Mixup] = None,
                     set_training_mode=True
                     ):
     # TODO fix this for finetuning
@@ -33,15 +38,20 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         msk = msk.to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
-            _, outputs = model(msk_im)
-            if isinstance(outputs, list):
-                loss_list = [criterion(o, targets) / len(outputs) for o in outputs]
-                loss = sum(loss_list)
-            else:
-                loss = criterion(outputs, msk_im) / msk.sum()
-                # torch.save(dict(output=outputs, msk_im=msk_im, loss=loss), "./test.pt")
-                # save_image(torch.cat([msk_im, outputs]), "./test.png", normalize=True, value_range=(-1, 1))
-                # exit()
+            # outputs = model(msk_im)
+            # if isinstance(outputs, list):
+            #     loss_list = [criterion(o, targets) / len(outputs) for o in outputs]
+            #     loss = sum(loss_list)
+            # else:
+            #     loss = criterion(outputs, msk_im) / msk.sum()
+            #     # torch.save(dict(output=outputs, msk_im=msk_im, loss=loss), "./test.pt")
+            #     # save_image(torch.cat([msk_im, outputs]), "./test.png", normalize=True, value_range=(-1, 1))
+            #     # exit()
+            outputs, mu, var = model(msk_im)
+            loss_mse = F.mse_loss(outputs, msk_im)
+            kl_div = kl_loss(mu, var)
+            loss = loss_mse + kl_div
+
 
         loss_value = loss.item()
 
@@ -60,11 +70,14 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         if model_ema is not None:
             model_ema.update(model)
 
-        if isinstance(outputs, list):
-            metric_logger.update(loss_0=loss_list[0].item())
-            metric_logger.update(loss_1=loss_list[1].item())
-        else:
-            metric_logger.update(loss=loss_value)
+        # if isinstance(outputs, list):
+        #     metric_logger.update(loss_0=loss_list[0].item())
+        #     metric_logger.update(loss_1=loss_list[1].item())
+        # else:
+        #     metric_logger.update(loss=loss_value)
+        metric_logger.update(loss_mse=loss_mse)
+        metric_logger.update(kl_div=kl_div)
+        metric_logger.update(loss=loss_value)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
 

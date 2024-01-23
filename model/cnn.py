@@ -274,7 +274,7 @@ class ConvTransBlock(nn.Module):
 class encoder(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=1000, base_channel=64, channel_ratio=4, num_med_block=0,
-                 embed_dim=768, depth=12, im_size=224):
+                 embed_dim=768, depth=12, im_size=224, use_vae=True):
 
         # Transformer
         super().__init__()
@@ -286,7 +286,8 @@ class encoder(nn.Module):
         # Latent output13
         self.last_pool = 4
         self.pooling = nn.AdaptiveAvgPool2d(self.last_pool)
-        self.conv_cls_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
+        self.mean_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
+        self.var_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
 
         # Stem stage: get the feature maps by conv block (copied form resnet.py)
         self.conv1 = nn.Conv2d(in_chans, 64, kernel_size=7, stride=2, padding=3, bias=False)  # 1 / 2 [112, 112]
@@ -388,10 +389,11 @@ class encoder(nn.Module):
 
 
         x_p = self.pooling(x).flatten(1)
-        conv_latent = self.conv_cls_head(x_p)
+        mu = self.mean_head(x_p)
+        var = self.mean_head(var)
 
 
-        return conv_latent
+        return mu, var
     
 
 
@@ -562,7 +564,7 @@ class decoder(nn.Module):
 class auto_encoder_cnn(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384, base_channel=64, channel_ratio_encoder=4, channel_ratio_decoder=4,
-                  num_med_block=0, embed_dim=768, depth=12, im_size=224, first_up=2, **kwargs):
+                  num_med_block=0, embed_dim=768, depth=12, im_size=224, first_up=2, use_vae=True, **kwargs):
         
         super().__init__()
         
@@ -573,22 +575,38 @@ class auto_encoder_cnn(nn.Module):
         self.decoder = [decoder(patch_size=patch_size, base_channel=base_channel, 
                                channel_ratio=channel_ratio_decoder, num_med_block=num_med_block,embed_dim=decode_embed, depth=depth, 
                                 im_size=im_size, first_up=first_up) for _ in range(4)]
-        self.mlp = nn.Linear(decode_embed * 4, decode_embed)
+        self.mlp_mean = nn.Linear(decode_embed * 4, decode_embed)
+        self.mlp_var = nn.Linear(decode_embed * 4, decode_embed) if use_vae else None
 
+
+    def sample(self, mu, log_var):
+        if log_var is not None:
+            var = torch.exp(0.5 * log_var)
+            z = torch.randn_like(mu)
+            z = var * z + mu
+        else:
+            z = mu
+        return z
 
 
 
     def forward(self, x):
-        latent = []
+        mus = []
+        vars = []
         for i in range(4):
-            latent.append(self.encoder[i](x[:, i*3 : i*3+3, :, :]))
-        latent = torch.cat(latent, 1)
-        latent = self.mlp(latent)
+            mu, var = self.encoder[i](x[:, i*3 : i*3+3, :, :])
+            mus.append(mu)
+            vars.append(var)
+        mu = torch.cat(mus, 1)
+        var = torch.cat(vars, 1)
+        mu = self.mlp_mean(mu)
+        var = self.mlp_var(var) if self.mlp_var else None
+        latent = self.sample(mu, var)
 
 
         pred = []
         for i in range(4):
             pred.append(self.decoder[i](latent))
         pred = torch.cat(pred, 1)
-        return latent, pred
+        return pred, mu, var
         
