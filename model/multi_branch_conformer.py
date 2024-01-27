@@ -41,7 +41,6 @@ class Attention(nn.Module):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -889,7 +888,6 @@ class auto_encoder_multi_branch(nn.Module):
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, first_up=2, num_branch=4, **kwargs):
         
         super().__init__()
-        
         self.encoder = encoder(patch_size=patch_size, in_chans=in_chans, decode_embed=decode_embed, base_channel=base_channel, 
                                channel_ratio=channel_ratio, num_med_block=num_med_block,embed_dim=embed_dim, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 

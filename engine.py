@@ -49,7 +49,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             #     # exit()
             outputs, mu, var = model(msk_im)
             loss_mse = F.mse_loss(outputs, msk_im)
-            kl_div = kl_loss(mu, var)
+            kl_div = 1e-2 * kl_loss(mu, var) if var is not None else 0
             loss = loss_mse + kl_div
 
 

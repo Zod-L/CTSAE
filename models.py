@@ -5,7 +5,7 @@ from functools import partial
 # from timm.models.vision_transformer import VisionTransformer, _cfg
 
 from model.vision_transformer import VisionTransformer, _cfg
-from conformer import Conformer, auto_encoder
+from model.conformer import Conformer, auto_encoder
 from model.multi_branch_conformer import auto_encoder_multi_branch
 from model.cnn import auto_encoder_cnn
 from model.vit import auto_encoder_vit

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from functools import partial
+import random
 
 from timm.models.layers import DropPath, trunc_normal_
 
@@ -41,6 +42,7 @@ class Attention(nn.Module):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+        
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -50,37 +52,114 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+    
+
+class Attention_Sep(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_branch=4):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+        self.scale = qk_scale or head_dim ** -0.5
+        self.num_branch = num_branch
+        self.attn_drop = attn_drop
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        spb = N // self.num_branch
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]  # [B, num_head, seq_len, dim]
+
+
+
+        # CLS collect information 
+        cls = x[:, 0:1, :]
+        cls = F.scaled_dot_product_attention(q[:, :, 0:1, :], k, v, scale=self.scale, dropout_p=self.attn_drop).reshape(B, 1, C) + cls
+        qkv_cls = self.qkv(cls).reshape(B, 1, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_head, 1, dim]
+
+        
+
+        xs = []
+        for i in range(self.num_branch):
+            xs.append(F.scaled_dot_product_attention(torch.cat((q_cls, q[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+                                                     torch.cat((k_cls, k[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+                                                     torch.cat((v_cls, v[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+                                                     scale=self.scale, dropout_p=self.attn_drop)[:, :, 1:, :].reshape(B, (N-1) // self.num_branch, C))
+
+
+
+
+        x = torch.cat([cls] + xs, 1)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+
+# class Block(nn.Module):
+
+#     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+#                  drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), branch=4):
+#         super().__init__()
+#         self.norm1 = norm_layer(dim)
+#         self.branch = branch
+#         for i in range(branch):
+#             setattr(self, f"attn_{i}", Attention(
+#                 dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop))
+#         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
+#         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+#         self.norm2 = norm_layer(dim)
+#         mlp_hidden_dim = int(dim * mlp_ratio)
+#         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+
+#     def forward(self, x):
+#         xs = []
+#         spb = (x.shape[1] - 1) // self.branch
+#         x = self.norm1(x)
+#         cls = x[:, 0:1, :]
+
+#         xs = [None] * self.branch
+#         branches = list(range(self.branch))
+#         random.shuffle(branches)
+#         for i in branches:
+#             _x = torch.cat([cls, x[:, 1+spb*i:1+spb*i+spb, :]], 1)
+#             _x = _x + self.drop_path(getattr(self, f"attn_{i}")(_x))
+#             cls = _x[:, 0:1, :]
+#             xs[i] = _x[:, 1:, :]
+
+#         x = torch.cat([cls] + xs, 1)
+#         x = x + self.drop_path(self.mlp((self.norm2(x))))
+            
+            
+        
+#         return x
+    
+
 
 
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), branch=4):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), num_branch=4):
         super().__init__()
-        for i in range(branch):
-            setattr(self, f"norm1_{i}", norm_layer(dim))
-        self.branch = branch
-        for i in range(branch):
-            setattr(self, f"attn_{i}", Attention(
-                dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop))
+        self.norm1 = norm_layer(dim)
+        self.attn = Attention_Sep(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, num_branch=num_branch)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        for i in range(branch):
-            setattr(self, f"norm2_{i}", norm_layer(dim))
+        self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        for i in range(branch):
-            setattr(self, f"mlp_{i}", Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop))
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
     def forward(self, x):
-        xs = []
-        spb = (x.shape[1] - 1) // self.branch
-        for i in range(self.branch):
-            _x = torch.cat([x[:, 0:1, :], x[:, 1+spb*i:1+spb*i+spb, :]], 1)
-            _x = _x + self.drop_path(getattr(self, f"attn_{i}")(getattr(self, f"norm1_{i}")(_x)))
-            _x = _x + self.drop_path(getattr(self, f"mlp_{i}")(getattr(self, f"norm2_{i}")(_x)))
-            xs.append(_x[:, 1:, :])
-        x = torch.cat([x[:, 0:1, :]] + xs, 1)
+        x = x + self.drop_path(self.attn(self.norm1(x)))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
+
 
 
 class ConvBlockSingle(nn.Module):
@@ -311,7 +390,7 @@ class FCUDown(nn.Module):
 
         x = self.act(x)
 
-        x = torch.cat([x_t[:, 0][:, None, :], x], dim=1)
+        x = torch.cat([x_t[:, 0:1], x], dim=1)
 
         return x
 
@@ -441,7 +520,7 @@ class ConvTransBlock(nn.Module):
 
     def __init__(self, inplanes, outplanes, res_conv, stride, dw_stride, embed_dim, num_heads=12, mlp_ratio=4.,
                  qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-                 last_fusion=False, num_med_block=0, groups=1, decode=False):
+                 last_fusion=False, num_med_block=0, groups=1, decode=False, num_branch=4):
 
         super(ConvTransBlock, self).__init__()
         expansion = 4
@@ -473,7 +552,7 @@ class ConvTransBlock(nn.Module):
 
         self.trans_block = Block(
             dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=drop_path_rate)
+            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=drop_path_rate, num_branch=num_branch)
 
         self.dw_stride = dw_stride
         self.embed_dim = embed_dim
@@ -557,7 +636,7 @@ class encoder(nn.Module):
   
         
         self.trans_1 = Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
-                             qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=self.trans_dpr[0],
+                             qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=self.trans_dpr[0], num_branch=num_branch
                              )
 
         # 2~4 stage
@@ -571,7 +650,7 @@ class encoder(nn.Module):
                         stage_1_channel, stage_1_channel, res_conv, s, dw_stride=trans_dw_stride // 2, embed_dim=embed_dim,
                         num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                         drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=self.trans_dpr[i-1],
-                        num_med_block=num_med_block
+                        num_med_block=num_med_block, num_branch=num_branch
                     )
             )
 
@@ -589,7 +668,7 @@ class encoder(nn.Module):
                         in_channel, stage_2_channel, res_conv, s, dw_stride=trans_dw_stride // 4, embed_dim=embed_dim,
                         num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                         drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=self.trans_dpr[i-1],
-                        num_med_block=num_med_block
+                        num_med_block=num_med_block, num_branch=num_branch
                     )
             )
 
@@ -607,7 +686,7 @@ class encoder(nn.Module):
                         in_channel, stage_3_channel, res_conv, s, dw_stride=trans_dw_stride // 8, embed_dim=embed_dim,
                         num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                         drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_rate=self.trans_dpr[i-1],
-                        num_med_block=num_med_block, last_fusion=last_fusion
+                        num_med_block=num_med_block, last_fusion=last_fusion, num_branch=num_branch
                     )
             )
         self.fin_stage = fin_stage
