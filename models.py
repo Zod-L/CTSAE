@@ -110,17 +110,17 @@ def Conformer_base_patch16(pretrained=False, **kwargs):
 
 
 @register_model
-def cnn_split224_4branch(pretrained=False, **kwargs):
+def cnn_split224_4branch(pretrained=False, use_vae=False, **kwargs):
     model = auto_encoder_cnn(patch_size=16, channel_ratio_encoder=4, channel_ratio_decoder=2, embed_dim=384, decode_embed=192, depth=12,
-                       im_size=224, first_up=2, **kwargs)
+                       im_size=224, first_up=2, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
 
 @register_model
-def attn_split224_4branch(pretrained=False, **kwargs):
+def attn_split224_4branch(pretrained=False, use_vae=False, **kwargs):
     model = auto_encoder_vit(patch_size=16, channel_ratio_encoder=4, channel_ratio_decoder=2, embed_dim=384, decode_embed=192, depth=12,
-                       im_size=224, first_up=2, **kwargs)
+                       im_size=224, first_up=2, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
@@ -169,9 +169,9 @@ def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
 
 
 @register_model
-def cls_attn_cnn_split224_4cnn_attn(pretrained=False, **kwargs):
+def cls_attn_cnn_split224_4cnn_attn(pretrained=False, use_vae=False, **kwargs):
     model = auto_encoder_multi_cnn_attn(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
-                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=True, **kwargs)
+                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
