@@ -84,6 +84,7 @@ class four_scale_dataset_with_fname(Dataset):
         self.scale = ["0.5", "1.0", "2.0", "4.0"]
         # self.scale = ["2.0"]
         self.fnames = [os.path.join(dir, f.replace("_4.0", "")) for dir in os.listdir(f"{path}/sub_4.0/") for f in os.listdir(os.path.join(f"{path}/sub_4.0/", dir))]
+
         self.to_tensor = transforms.Compose([transforms.ToTensor()])
         self.normalize = transforms.Compose([transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                                              transforms.Resize(im_size, antialias=True)])

@@ -5,6 +5,7 @@ import shutil
 import random
 import pickle
 from data import four_scale_dataset
+import numpy as np
 model = cls_attn_cnn_split224_4cnn_attn()
 
 # total = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
@@ -21,13 +22,20 @@ model = cls_attn_cnn_split224_4cnn_attn()
 # print(part)
 # print(part / total * 100)
 
-dataset = four_scale_dataset("../gravityspy/processed/", 0, 223)
-print(len(dataset))
+# dataset = four_scale_dataset("../gravityspy/train/", 0, 223)
+# print(len(dataset))
 
-x = torch.zeros((8, 12, 224, 224))
-latent, pred = model(x)
-print(latent.shape)
-print(pred.shape)
+
+# dataset = four_scale_dataset("../gravityspy/val/", 0, 223)
+# print(len(dataset))
+
+# dataset = four_scale_dataset("../gravityspy/test/", 0, 223)
+# print(len(dataset))
+
+# x = torch.zeros((8, 12, 224, 224))
+# latent, pred = model(x)
+# print(latent.shape)
+# print(pred.shape)
 
 
 # print(sum(p.numel() for p in model.encoder.parameters() if p.requires_grad))
@@ -99,3 +107,6 @@ print(pred.shape)
 # with open('fnames.pkl', 'wb') as fp:
 #     pickle.dump(dict(train_fnames=train_fnames, test_fnames=test_fnames, val_fnames=val_fnames), fp)
 
+a = np.load("test/1080Lines/H1_1j35rdGqhj_spectrogram.png.npy")
+b = np.load("H1_1j35rdGqhj_spectrogram.png.npy")
+print(a == b)

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # Train
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_node=8 --use_env train.py \
-                                   --model cls_attn_cnn_split224_4cnn_attn \
+python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_node=4 --use_env train.py \
+                                   --model cnn_split224_4branch \
                                    --im-size 224 \
                                    --data-set IMNET \
                                    --threshold 0 \
@@ -12,7 +12,7 @@ python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_nod
                                    --lr 0.001 \
                                    --num_workers 4 \
                                    --data-path ../gravityspy/train/ \
-                                   --output_dir ./output/cls_attn_cnn_split224_4cnn_attn_vae \
+                                   --output_dir ./output/cnn_split224_4branch_ae \
                                    --epochs 201 \
                                    --save_freq 20 \
 

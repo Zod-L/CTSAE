@@ -287,7 +287,7 @@ class encoder(nn.Module):
         self.last_pool = 4
         self.pooling = nn.AdaptiveAvgPool2d(self.last_pool)
         self.mean_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
-        self.var_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
+        self.var_head = nn.Linear(int(base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed) if use_vae else None
 
         # Stem stage: get the feature maps by conv block (copied form resnet.py)
         self.conv1 = nn.Conv2d(in_chans, 64, kernel_size=7, stride=2, padding=3, bias=False)  # 1 / 2 [112, 112]
@@ -390,7 +390,7 @@ class encoder(nn.Module):
 
         x_p = self.pooling(x).flatten(1)
         mu = self.mean_head(x_p)
-        var = self.mean_head(var)
+        var = self.var_head(x_p) if self.var_head else None
 
 
         return mu, var
@@ -568,13 +568,17 @@ class auto_encoder_cnn(nn.Module):
         
         super().__init__()
         
-
-        self.encoder = [encoder(patch_size=patch_size, in_chans=in_chans, decode_embed=decode_embed, base_channel=base_channel, 
+        for i in range(4):
+            setattr(self, f"encoder_{i}", encoder(patch_size=patch_size, in_chans=in_chans, decode_embed=decode_embed, base_channel=base_channel, 
                                channel_ratio=channel_ratio_encoder, num_med_block=num_med_block,embed_dim=embed_dim, depth=depth, 
-                                im_size=im_size) for _ in range(4)]
-        self.decoder = [decoder(patch_size=patch_size, base_channel=base_channel, 
+                                im_size=im_size, use_vae=use_vae))
+
+
+        for i in range(4):
+            setattr(self, f"decoder_{i}", decoder(patch_size=patch_size, base_channel=base_channel, 
                                channel_ratio=channel_ratio_decoder, num_med_block=num_med_block,embed_dim=decode_embed, depth=depth, 
-                                im_size=im_size, first_up=first_up) for _ in range(4)]
+                                im_size=im_size, first_up=first_up))
+
         self.mlp_mean = nn.Linear(decode_embed * 4, decode_embed)
         self.mlp_var = nn.Linear(decode_embed * 4, decode_embed) if use_vae else None
 
@@ -594,11 +598,11 @@ class auto_encoder_cnn(nn.Module):
         mus = []
         vars = []
         for i in range(4):
-            mu, var = self.encoder[i](x[:, i*3 : i*3+3, :, :])
+            mu, var = getattr(self, f"encoder_{i}")(x[:, i*3 : i*3+3, :, :])
             mus.append(mu)
             vars.append(var)
         mu = torch.cat(mus, 1)
-        var = torch.cat(vars, 1)
+        var = torch.cat(vars, 1) if self.mlp_var else None
         mu = self.mlp_mean(mu)
         var = self.mlp_var(var) if self.mlp_var else None
         latent = self.sample(mu, var)
@@ -606,7 +610,7 @@ class auto_encoder_cnn(nn.Module):
 
         pred = []
         for i in range(4):
-            pred.append(self.decoder[i](latent))
+            pred.append(getattr(self, f"decoder_{i}")(latent))
         pred = torch.cat(pred, 1)
         return pred, mu, var
         
