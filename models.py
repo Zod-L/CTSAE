@@ -60,13 +60,13 @@ def attn_split224_4branch(pretrained=False, use_vae=False, **kwargs):
 #     return model
 
 
-# @register_model
-# def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
-#     model = auto_encoder_multi_branch(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
-#                       num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, **kwargs)
-#     if pretrained:
-#         raise NotImplementedError
-#     return model
+@register_model
+def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
+    model = auto_encoder_multi_branch(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
+                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
 
 
 

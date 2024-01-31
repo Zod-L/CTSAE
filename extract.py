@@ -11,8 +11,8 @@ import shutil
 
 def main(i):
     device = "cuda:5"
-    model = cls_attn_cnn_split224_4cnn_attn(use_vae=True)
-    model.load_state_dict(torch.load("output/cls_attn_cnn_split224_4cnn_attn_vae/checkpoint_160.pth", map_location=device)["model"])
+    model = cls_attn_cnn_split224_4cnn_attn(use_vae=False)
+    model.load_state_dict(torch.load("output/cls_attn_cnn_split224_4cnn_attn_ae/checkpoint_160.pth", map_location=device)["model"])
     model = model.to(device)
     model.eval()
     dataset = four_scale_dataset_with_fname("../gravityspy/split/test/", 0)

@@ -903,5 +903,5 @@ class auto_encoder_multi_branch(nn.Module):
     def forward(self, x):
         latent  = self.encoder(x)
         pred = self.decoder(latent)
-        return latent, pred
+        return pred, latent, None
         
