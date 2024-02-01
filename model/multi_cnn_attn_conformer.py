@@ -54,6 +54,54 @@ class Attention(nn.Module):
         return x
     
 
+# class Attention_Sep(nn.Module):
+#     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_branch=4):
+#         super().__init__()
+#         self.num_heads = num_heads
+#         head_dim = dim // num_heads
+#         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+#         self.scale = qk_scale or head_dim ** -0.5
+#         self.num_branch = num_branch
+#         self.attn_drop = attn_drop
+
+#         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+#         self.proj = nn.Linear(dim, dim)
+#         self.proj_drop = nn.Dropout(proj_drop)
+
+#     def forward(self, x):
+#         B, N, C = x.shape
+#         spb = N // self.num_branch
+#         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+#         q, k, v = qkv[0], qkv[1], qkv[2]  # [B, num_head, seq_len, dim]
+
+
+
+#         # CLS collect information 
+#         cls = x[:, 0:1, :]
+#         cls = F.scaled_dot_product_attention(q[:, :, 0:1, :], k, v, scale=self.scale, dropout_p=self.attn_drop).reshape(B, 1, C) + cls
+#         qkv_cls = self.qkv(cls).reshape(B, 1, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+#         q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_head, 1, dim]
+
+        
+
+#         xs = []
+#         for i in range(self.num_branch):
+#             xs.append(F.scaled_dot_product_attention(torch.cat((q_cls, q[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+#                                                      torch.cat((k_cls, k[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+#                                                      torch.cat((v_cls, v[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
+#                                                      scale=self.scale, dropout_p=self.attn_drop)[:, :, 1:, :].reshape(B, (N-1) // self.num_branch, C))
+
+
+
+
+#         x = torch.cat([cls] + xs, 1)
+#         x = self.proj(x)
+#         x = self.proj_drop(x)
+#         return x
+
+
+
+
 class Attention_Sep(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_branch=4):
         super().__init__()
@@ -64,80 +112,67 @@ class Attention_Sep(nn.Module):
         self.num_branch = num_branch
         self.attn_drop = attn_drop
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.proj = nn.Linear(dim, dim)
+        for i in range(num_branch):
+            setattr(self, f"qkv_{i}", nn.Linear(dim, dim * 3, bias=qkv_bias))
+            setattr(self, f"proj_{i}", nn.Linear(dim, dim))
+        
+        self.fuse_q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.fuse_kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.cls_proj = nn.Linear(dim, dim)
+
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
         B, N, C = x.shape
-        spb = N // self.num_branch
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # [B, num_head, seq_len, dim]
+        spb = (N-1) // self.num_branch
 
 
-
-        # CLS collect information 
         cls = x[:, 0:1, :]
-        cls = F.scaled_dot_product_attention(q[:, :, 0:1, :], k, v, scale=self.scale, dropout_p=self.attn_drop).reshape(B, 1, C) + cls
-        qkv_cls = self.qkv(cls).reshape(B, 1, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_head, 1, dim]
+        q = self.fuse_q(cls).reshape(B, 1, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
+        kv = self.fuse_kv(x).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        k, v = kv[0], kv[1]  # [B, num_head, seq_len, dim]
+        # CLS collect information 
+        cls = F.scaled_dot_product_attention(q, k, v, scale=self.scale, dropout_p=self.attn_drop).reshape(B, 1, C) + cls
+
 
         
 
         xs = []
         for i in range(self.num_branch):
-            xs.append(F.scaled_dot_product_attention(torch.cat((q_cls, q[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-                                                     torch.cat((k_cls, k[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-                                                     torch.cat((v_cls, v[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-                                                     scale=self.scale, dropout_p=self.attn_drop)[:, :, 1:, :].reshape(B, (N-1) // self.num_branch, C))
+            qkv = getattr(self, f"qkv_{i}")(torch.cat((cls, x[:, 1+i*spb:1+i*spb+spb, :]), 1)).reshape(B, spb+1, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]  # [B, num_head, seq_len, dim]
 
+            _x = F.scaled_dot_product_attention(q, k, v, 
+                                                     scale=self.scale, dropout_p=self.attn_drop)[:, :, 1:, :].reshape(B, (N-1) // self.num_branch, C)
+            
+            xs.append(getattr(self, f"proj_{i}")(_x))
 
+        cls = self.cls_proj(cls)
 
 
         x = torch.cat([cls] + xs, 1)
-        x = self.proj(x)
         x = self.proj_drop(x)
         return x
 
 
-# class Block(nn.Module):
-
-#     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-#                  drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), branch=4):
-#         super().__init__()
-#         self.norm1 = norm_layer(dim)
-#         self.branch = branch
-#         for i in range(branch):
-#             setattr(self, f"attn_{i}", Attention(
-#                 dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop))
-#         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-#         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-#         self.norm2 = norm_layer(dim)
-#         mlp_hidden_dim = int(dim * mlp_ratio)
-#         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-
-#     def forward(self, x):
-#         xs = []
-#         spb = (x.shape[1] - 1) // self.branch
-#         x = self.norm1(x)
-#         cls = x[:, 0:1, :]
-
-#         xs = [None] * self.branch
-#         branches = list(range(self.branch))
-#         random.shuffle(branches)
-#         for i in branches:
-#             _x = torch.cat([cls, x[:, 1+spb*i:1+spb*i+spb, :]], 1)
-#             _x = _x + self.drop_path(getattr(self, f"attn_{i}")(_x))
-#             cls = _x[:, 0:1, :]
-#             xs[i] = _x[:, 1:, :]
-
-#         x = torch.cat([cls] + xs, 1)
-#         x = x + self.drop_path(self.mlp((self.norm2(x))))
-            
-            
-        
-#         return x
     
+
+class split_layer_norm(nn.Module):
+    def __init__(self, dim, num_branch=4):
+        self.num_branch = num_branch
+        for i in range(num_branch):
+            setattr(self, f"norm_{i}", nn.LayerNorm(dim, eps=1e-6))
+        self.norm_cls = nn.LayerNorm(dim, eps=1e-6)
+        
+    def forward(self, x):
+        B, N, C = x.shape
+        spb = (N-1) // self.num_branch
+        xs = []
+
+        for i in range(self.num_branch):
+            xs.append(getattr(self, f"norm_{i}")(x[:, 1+spb*i:1+spb*i+spb, :]))
+
+        return torch.cat((self.norm_cls(x[:, 0:1, :]), xs), 1)
 
 
 

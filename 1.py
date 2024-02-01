@@ -32,10 +32,10 @@ model = cls_attn_cnn_split224_4cnn_attn()
 # dataset = four_scale_dataset("../gravityspy/test/", 0, 223)
 # print(len(dataset))
 
-# x = torch.zeros((8, 12, 224, 224))
-# latent, pred = model(x)
-# print(latent.shape)
-# print(pred.shape)
+x = torch.zeros((8, 12, 224, 224))
+pred, latent, var = model(x)
+print(latent.shape)
+print(pred.shape)
 
 
 # print(sum(p.numel() for p in model.encoder.parameters() if p.requires_grad))
