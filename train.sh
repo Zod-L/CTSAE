@@ -14,10 +14,4 @@ python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_nod
                                    --data-path ../gravityspy/split/train/ \
                                    --output_dir ./output/4cnn_4attn_ae_new \
                                    --epochs 201 \
-                                   --save_freq 1 \
-
-
-
-
-
-
+                                   --save_freq 20 \

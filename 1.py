@@ -1,4 +1,4 @@
-from models import cls_attn_cnn_split224_4cnn_attn
+from models import cls_attn_cnn_split224_4cnn_attn, cls_attn_cnn_split224_4branch
 import torch
 import os
 import shutil
@@ -6,7 +6,7 @@ import random
 import pickle
 from data import four_scale_dataset
 import numpy as np
-model = cls_attn_cnn_split224_4cnn_attn()
+model = cls_attn_cnn_split224_4branch()
 
 # total = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
 
@@ -107,6 +107,13 @@ print(pred.shape)
 # with open('fnames.pkl', 'wb') as fp:
 #     pickle.dump(dict(train_fnames=train_fnames, test_fnames=test_fnames, val_fnames=val_fnames), fp)
 
-a = np.load("test/1080Lines/H1_1j35rdGqhj_spectrogram.png.npy")
-b = np.load("H1_1j35rdGqhj_spectrogram.png.npy")
-print(a == b)
+# a = np.load("test/1080Lines/H1_1j35rdGqhj_spectrogram.png.npy")
+# b = np.load("H1_1j35rdGqhj_spectrogram.png.npy")
+# print(a == b)
+
+
+for fname in os.listdir("output/4cnn_1attn_split"):
+    if fname == "log.txt":
+        continue
+    if int(fname.split(".")[0].split("_")[-1]) % 20 != 0:
+        os.remove(f"output/4cnn_1attn_split/{fname}")

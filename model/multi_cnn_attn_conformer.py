@@ -647,7 +647,10 @@ class encoder(nn.Module):
         self.trans_norm = nn.LayerNorm(embed_dim)
         self.trans_cls_head = nn.Linear(embed_dim, decode_embed)
         self.pooling = nn.AdaptiveAvgPool2d(self.last_pool)
-        self.conv_cls_head = nn.Linear(int(num_branch * base_channel * channel_ratio * 4 * self.last_pool * self.last_pool), decode_embed)
+        for i in range(num_branch):
+            setattr(self, f"conv_head{i}", nn.Linear(int(num_branch * base_channel * channel_ratio * self.last_pool * self.last_pool), decode_embed))
+        
+        self.conv_head = nn.Linear(4 * decode_embed, decode_embed)
         self.mean_head = nn.Linear(2 * decode_embed, decode_embed)
         self.var_head = nn.Linear(2 * decode_embed, decode_embed) if use_vae else None
 
@@ -786,8 +789,12 @@ class encoder(nn.Module):
             x, x_t = eval('self.conv_trans_' + str(i))(x, x_t)
 
 
-        x_p = self.pooling(x).flatten(1)
-        conv_latent = self.conv_cls_head(x_p)
+        x_p = self.pooling(x)
+        cpb = x_p.shape[1] // self.num_branch
+        conv_latent = []
+        for i in range(self.num_branch):
+            conv_latent.append(getattr(self, f"conv_head{i}")(x_p[:, i*cpb : i*cpb + cpb, :, :].flatten(1)))
+        conv_latent = self.conv_head(torch.cat(conv_latent, 1))
 
         # trans classification
         x_t = self.trans_norm(x_t)

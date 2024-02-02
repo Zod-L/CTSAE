@@ -5,18 +5,17 @@ from data import *
 from tqdm import tqdm
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from models import cnn_split224_4branch
+from models import cls_attn_cnn_split224_4branch
 import shutil
 
 
 def main(i):
     device = "cuda:4"
-    model = cnn_split224_4branch(use_vae=False)
-    print(f"output/cnn_split224_4branch_ae/checkpoint_{i}.pth")
-    model.load_state_dict(torch.load(f"output/cnn_split224_4branch_ae/checkpoint_{i}.pth", map_location=device)["model"])
+    model = cls_attn_cnn_split224_4branch(use_vae=False)
+    model.load_state_dict(torch.load(f"output/4cnn_1attn_split/checkpoint_{i}.pth", map_location=device)["model"])
     model = model.to(device)
     model.eval()
-    dataset = four_scale_dataset_with_fname("../gravityspy/split/val/", 0)
+    dataset = four_scale_dataset_with_fname("../gravityspy/split/test/", 0)
     C = dataset[0][0].shape[0]
     batch = 16
     dataloader = DataLoader(dataset=dataset, batch_size=batch, shuffle=False, num_workers=8)
@@ -61,5 +60,5 @@ def main(i):
     
 if os.path.exists("./test_out"):
     shutil.rmtree("./test_out")
-for i in range(20, 101, 20):
+for i in range(20, 201, 20):
     main(i)

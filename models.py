@@ -75,8 +75,8 @@ def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
 
 @register_model
 def cls_attn_cnn_split224_4cnn_attn(pretrained=False, use_vae=False, **kwargs):
-    model = auto_encoder_multi_cnn_attn(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
-                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=use_vae, **kwargs)
+    model = auto_encoder_multi_cnn_attn(patch_size=16, channel_ratio=2, embed_dim=192, decode_embed=192, depth=12,
+                      num_heads=6, mlp_ratio=1, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
