@@ -5,14 +5,14 @@ from data import *
 from tqdm import tqdm
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from models import cls_attn_cnn_split224_4branch
+from models import auto_encoder_no_comm_224, cnn_split224_4branch
 import shutil
 
 
 def main(i):
-    device = "cuda:4"
-    model = cls_attn_cnn_split224_4branch(use_vae=False)
-    model.load_state_dict(torch.load(f"output/4cnn_1attn_split/checkpoint_{i}.pth", map_location=device)["model"])
+    device = "cuda"
+    model = auto_encoder_no_comm_224(use_vae=False)
+    model.load_state_dict(torch.load(f"output/cnn_attn_no_comm/checkpoint_{i}.pth", map_location=device)["model"])
     model = model.to(device)
     model.eval()
     dataset = four_scale_dataset_with_fname("../gravityspy/split/test/", 0)

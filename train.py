@@ -230,9 +230,11 @@ def main(args):
     if utils.is_main_process():
         if hasattr(model, "encoder"):
             print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)}")
-            print(f"Number of decoder parameters: {sum(p.numel() for p in model.decoder.parameters() if p.requires_grad)}")
         else:
             print(f"Number of encoder parameters: {sum(p.numel() for i in range(4) for p in getattr(model, f'encoder_{i}').parameters()  if p.requires_grad)}")
+        if hasattr(model, "decoder"):
+            print(f"Number of decoder parameters: {sum(p.numel() for p in model.decoder.parameters() if p.requires_grad)}")
+        else:
             print(f"Number of encoder parameters: {sum(p.numel() for i in range(4) for p in getattr(model, f'decoder_{i}').parameters()  if p.requires_grad)}")         
 
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)

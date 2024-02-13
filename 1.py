@@ -1,4 +1,4 @@
-from models import cls_attn_cnn_split224_4cnn_attn, cls_attn_cnn_split224_4branch
+from models import auto_encoder_no_comm_224
 import torch
 import os
 import shutil
@@ -6,7 +6,7 @@ import random
 import pickle
 from data import four_scale_dataset
 import numpy as np
-model = cls_attn_cnn_split224_4branch()
+model = auto_encoder_no_comm_224()
 
 # total = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
 
