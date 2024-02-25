@@ -9,7 +9,8 @@ from model.conformer import Conformer, auto_encoder
 from model.multi_branch_conformer import auto_encoder_multi_branch
 from model.cnn import auto_encoder_cnn
 from model.vit import auto_encoder_vit
-from model.multi_cnn_attn_conformer import auto_encoder_multi_cnn_attn
+from model.multi_cnn_attn_conformer_split import auto_encoder_multi_cnn_attn_split
+from model.multi_cnn_attn_conformer_share import auto_encoder_multi_cnn_attn_share
 from model.multi_cnn_attn_encoder_cnn_decoder import cnn_attn_encoder_cnn_decoder
 from model.conformer_no_communicate import auto_encoder_no_comm
 from timm.models.registry import register_model
@@ -76,8 +77,17 @@ def cls_attn_cnn_split224_4branch(pretrained=False, **kwargs):
 
 
 @register_model
-def cls_attn_cnn_split224_4cnn_attn(pretrained=False, use_vae=False, **kwargs):
-    model = auto_encoder_multi_cnn_attn(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
+def cnn_share_attn(pretrained=False, use_vae=False, **kwargs):
+    model = auto_encoder_multi_cnn_attn_share(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
+                      num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=use_vae, **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
+
+
+@register_model
+def cnn_split_attn(pretrained=False, use_vae=False, **kwargs):
+    model = auto_encoder_multi_cnn_attn_split(patch_size=16, channel_ratio=2, embed_dim=384, decode_embed=192, depth=12,
                       num_heads=6, mlp_ratio=2, qkv_bias=True, im_size=224, first_up=2, num_branch=4, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError

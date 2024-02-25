@@ -272,7 +272,6 @@ class decoder(nn.Module):
 
         self.patch_size = patch_size
         self.im_size = im_size
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
@@ -294,7 +293,6 @@ class decoder(nn.Module):
         self.apply(self._init_weights)
 
         trunc_normal_(self.pos_embed, std=.02)
-        trunc_normal_(self.cls_token, std=.02)
 
 
 

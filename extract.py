@@ -5,27 +5,30 @@ from data import *
 from tqdm import tqdm
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from models import auto_encoder_no_comm_224, cnn_split224_4branch
+from models import cnn_share_attn, cnn_split_attn, cnn_split224_4branch
 import shutil
 
 
-def main(i):
-    device = "cuda"
-    model = auto_encoder_no_comm_224(use_vae=False)
-    model.load_state_dict(torch.load(f"output/cnn_attn_no_comm/checkpoint_{i}.pth", map_location=device)["model"])
+
+def main(i, dir, out_dir, model_class):
+    latent_dir = os.path.join(out_dir, f"{split}/test_{i}")
+    im_dir = os.path.join(out_dir, f"{split}/test_im_{i}")
+
+    if os.path.exists(latent_dir):
+        return
+
+    model = model_class(use_vae=False)
+    model.load_state_dict(torch.load(f"{dir}/checkpoint_{i}.pth", map_location=device)["model"])
     model = model.to(device)
     model.eval()
-    dataset = four_scale_dataset_with_fname("../gravityspy/split/test/", 0)
+    dataset = four_scale_dataset_with_fname(f"../gravityspy/mixed_split/{split}/", 0)
     C = dataset[0][0].shape[0]
     batch = 16
-    dataloader = DataLoader(dataset=dataset, batch_size=batch, shuffle=False, num_workers=8)
-
-    latent_dir = f"./test_out/test_{i}"
-    im_dir = f"./test_out/test_im_{i}"
+    dataloader = DataLoader(dataset=dataset, batch_size=batch, shuffle=False, num_workers=4)
 
 
 
-
+    
     with torch.no_grad():
         for im, ori_im, msk, fnames in tqdm(dataloader):
 
@@ -58,7 +61,14 @@ def main(i):
                 np.save(os.path.join(latent_dir, fname.split("/")[-2],fname.split("/")[-1]), latent[i:i+1, ...].detach().cpu().numpy())
                 #save_image(res, os.path.join(im_dir, fname.split("/")[-2],fname.split("/")[-1]), normalize=True, value_range=(-1, 1), nrow=4)
     
-if os.path.exists("./test_out"):
-    shutil.rmtree("./test_out")
-for i in range(20, 201, 20):
-    main(i)
+# if os.path.exists("./test_out"):
+#     shutil.rmtree("./test_out")
+split = "val"                
+indir = "mix_output/cnn_share_attn"
+outdir = "latent_code/cnn_share_attn"
+device = "cuda:2"
+ckpt_num = [int(fname.split(".")[0]) for fname in os.listdir(indir) if fname.endswith(".png")]
+ckpt_num.sort()
+for i in ckpt_num:
+    if i % 10 == 0:
+        main(i, indir, outdir, cnn_share_attn)

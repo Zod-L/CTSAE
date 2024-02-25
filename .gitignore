@@ -56,7 +56,6 @@ docs/_build/
 # PyBuilder
 target/
 
-output
-test
-test_im
-test_out
+
+latent_code
+*_output

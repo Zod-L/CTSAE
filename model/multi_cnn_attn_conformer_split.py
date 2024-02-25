@@ -25,79 +25,9 @@ class Mlp(nn.Module):
         return x
 
 
-class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim ** -0.5
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-        
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
     
 
-# class Attention_Sep(nn.Module):
-#     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., num_branch=4):
-#         super().__init__()
-#         self.num_heads = num_heads
-#         head_dim = dim // num_heads
-#         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-#         self.scale = qk_scale or head_dim ** -0.5
-#         self.num_branch = num_branch
-#         self.attn_drop = attn_drop
-
-#         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-#         self.proj = nn.Linear(dim, dim)
-#         self.proj_drop = nn.Dropout(proj_drop)
-
-#     def forward(self, x):
-#         B, N, C = x.shape
-#         spb = N // self.num_branch
-#         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-#         q, k, v = qkv[0], qkv[1], qkv[2]  # [B, num_head, seq_len, dim]
-
-
-
-#         # CLS collect information 
-#         cls = x[:, 0:1, :]
-#         cls = F.scaled_dot_product_attention(q[:, :, 0:1, :], k, v, scale=self.scale, dropout_p=self.attn_drop).reshape(B, 1, C) + cls
-#         qkv_cls = self.qkv(cls).reshape(B, 1, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-#         q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_head, 1, dim]
-
-        
-
-#         xs = []
-#         for i in range(self.num_branch):
-#             xs.append(F.scaled_dot_product_attention(torch.cat((q_cls, q[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-#                                                      torch.cat((k_cls, k[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-#                                                      torch.cat((v_cls, v[:, :, 1+i*spb:1+i*spb+spb, :]), 2), 
-#                                                      scale=self.scale, dropout_p=self.attn_drop)[:, :, 1:, :].reshape(B, (N-1) // self.num_branch, C))
-
-
-
-
-#         x = torch.cat([cls] + xs, 1)
-#         x = self.proj(x)
-#         x = self.proj_drop(x)
-#         return x
 
 
 
@@ -1016,7 +946,7 @@ class decoder(nn.Module):
 
 
 
-class auto_encoder_multi_cnn_attn(nn.Module):
+class auto_encoder_multi_cnn_attn_split(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384, base_channel=64, channel_ratio=4, num_med_block=0,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
