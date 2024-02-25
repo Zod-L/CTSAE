@@ -14,5 +14,5 @@ python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_nod
                                    --data-path ../gravityspy/mixed_split/train/ \
                                    --output_dir ./mix_output/cnn_split_attn \
                                    --epochs 401 \
-                                   --save_freq 1 \
+                                   --save_freq 20 \
                                    --resume mix_output/cnn_split_attn/checkpoint_140.pth
