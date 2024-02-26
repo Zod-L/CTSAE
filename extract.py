@@ -5,7 +5,7 @@ from data import *
 from tqdm import tqdm
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from models import cnn_share_attn, cnn_split_attn, cnn_split224_4branch
+from models import cnn_share_attn, cnn_split_attn, cnn, vit_share, conformer
 import shutil
 
 
@@ -35,7 +35,7 @@ def main(i, dir, out_dir, model_class):
 
 
             pred, latent, var = model(im.to(device))
-            
+            latent = latent[:, :]
 
 
 
@@ -63,12 +63,12 @@ def main(i, dir, out_dir, model_class):
     
 # if os.path.exists("./test_out"):
 #     shutil.rmtree("./test_out")
-split = "val"                
-indir = "mix_output/cnn_share_attn"
-outdir = "latent_code/cnn_share_attn"
-device = "cuda:2"
+split = "test"                
+indir = "mix_output/conformer"
+outdir = "latent_code/conformer"
+device = "cuda"
 ckpt_num = [int(fname.split(".")[0]) for fname in os.listdir(indir) if fname.endswith(".png")]
 ckpt_num.sort()
 for i in ckpt_num:
     if i % 10 == 0:
-        main(i, indir, outdir, cnn_share_attn)
+        main(i, indir, outdir, conformer)

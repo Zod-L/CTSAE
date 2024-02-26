@@ -8,7 +8,8 @@ from model.vision_transformer import VisionTransformer, _cfg
 from model.conformer import Conformer, auto_encoder
 from model.multi_branch_conformer import auto_encoder_multi_branch
 from model.cnn import auto_encoder_cnn
-from model.vit import auto_encoder_vit
+from model.vit_split import auto_encoder_vit_split
+from model.vit_share import auto_encoder_vit_share
 from model.multi_cnn_attn_conformer_split import auto_encoder_multi_cnn_attn_split
 from model.multi_cnn_attn_conformer_share import auto_encoder_multi_cnn_attn_share
 from model.multi_cnn_attn_encoder_cnn_decoder import cnn_attn_encoder_cnn_decoder
@@ -33,13 +34,20 @@ def cnn(pretrained=False, use_vae=False, **kwargs):
 
 
 @register_model
-def vit(pretrained=False, use_vae=False, **kwargs):
-    model = auto_encoder_vit(patch_size=16, channel_ratio_encoder=2, channel_ratio_decoder=2, embed_dim=384, decode_embed=192, depth=12,
+def vit_share(pretrained=False, use_vae=False, **kwargs):
+    model = auto_encoder_vit_share(patch_size=16, channel_ratio_encoder=2, channel_ratio_decoder=2, embed_dim=384, decode_embed=192, depth=12,
                        im_size=224, first_up=2, use_vae=use_vae, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
 
+@register_model
+def vit_split(pretrained=False, use_vae=False, **kwargs):
+    model = auto_encoder_vit_split(patch_size=16, channel_ratio_encoder=2, channel_ratio_decoder=2, embed_dim=384, decode_embed=192, depth=12,
+                       im_size=224, first_up=2, use_vae=use_vae, **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
 
 
 

@@ -10,7 +10,7 @@ python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_nod
                                    --threshold 0 \
                                    --batch-size 4 \
                                    --lr 0.001 \
-                                   --num_workers 4 \
+                                   --num_workers 8 \
                                    --data-path ../gravityspy/mixed_split/train/ \
                                    --output_dir ./mix_output/cnn_split_attn \
                                    --epochs 401 \

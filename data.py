@@ -81,8 +81,8 @@ class four_scale_dataset_with_fname(Dataset):
     def __init__(self, path, threshold, im_size=224):
         super().__init__()
         self.path = path
-        self.scale = ["0.5", "1.0", "2.0", "4.0"]
-        # self.scale = ["2.0"]
+        # self.scale = ["0.5", "1.0", "2.0", "4.0"]
+        self.scale = ["2.0"]
         self.fnames = [os.path.join(dir, f.replace("_0.5", "")) for dir in os.listdir(f"{path}/sub_0.5/") for f in os.listdir(os.path.join(f"{path}/sub_0.5/", dir))]
 
         self.to_tensor = transforms.Compose([transforms.ToTensor()])
