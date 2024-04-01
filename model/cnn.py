@@ -564,23 +564,24 @@ class decoder(nn.Module):
 class auto_encoder_cnn(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384, base_channel=64, channel_ratio_encoder=4, channel_ratio_decoder=4,
-                  num_med_block=0, embed_dim=768, depth=12, im_size=224, first_up=2, use_vae=True, **kwargs):
+                  num_med_block=0, embed_dim=768, depth=12, im_size=224, first_up=2, use_vae=True, num_branch=4, **kwargs):
         
         super().__init__()
+        self.num_branch = num_branch
         
-        for i in range(4):
+        for i in range(num_branch):
             setattr(self, f"encoder_{i}", encoder(patch_size=patch_size, in_chans=in_chans, decode_embed=decode_embed, base_channel=base_channel, 
                                channel_ratio=channel_ratio_encoder, num_med_block=num_med_block,embed_dim=embed_dim, depth=depth, 
                                 im_size=im_size, use_vae=use_vae))
 
 
-        for i in range(4):
+        for i in range(num_branch):
             setattr(self, f"decoder_{i}", decoder(patch_size=patch_size, base_channel=base_channel, 
                                channel_ratio=channel_ratio_decoder, num_med_block=num_med_block,embed_dim=decode_embed, depth=depth, 
                                 im_size=im_size, first_up=first_up))
 
-        self.mlp_mean = nn.Linear(decode_embed * 4, decode_embed)
-        self.mlp_var = nn.Linear(decode_embed * 4, decode_embed) if use_vae else None
+        self.mlp_mean = nn.Linear(decode_embed * num_branch, decode_embed)
+        self.mlp_var = nn.Linear(decode_embed * num_branch, decode_embed) if use_vae else None
 
 
     def sample(self, mu, log_var):
@@ -597,7 +598,7 @@ class auto_encoder_cnn(nn.Module):
     def forward(self, x):
         mus = []
         vars = []
-        for i in range(4):
+        for i in range(self.num_branch):
             mu, var = getattr(self, f"encoder_{i}")(x[:, i*3 : i*3+3, :, :])
             mus.append(mu)
             vars.append(var)
@@ -609,7 +610,7 @@ class auto_encoder_cnn(nn.Module):
 
 
         pred = []
-        for i in range(4):
+        for i in range(self.num_branch):
             pred.append(getattr(self, f"decoder_{i}")(latent))
         pred = torch.cat(pred, 1)
         return pred, mu, var

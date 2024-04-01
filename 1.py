@@ -112,6 +112,8 @@ print(pred.shape)
 # print(a == b)
 
 
+
+
 for fname in os.listdir("output/4cnn_1attn_split"):
     if fname == "log.txt":
         continue

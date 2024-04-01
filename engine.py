@@ -33,7 +33,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
 
-    for msk_im, _, msk in metric_logger.log_every(data_loader, print_freq, header):
+    for msk_im, _, msk, _ in metric_logger.log_every(data_loader, print_freq, header):
         msk_im = msk_im.to(device, non_blocking=True)
         msk = msk.to(device, non_blocking=True)
 

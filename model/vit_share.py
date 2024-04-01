@@ -111,15 +111,16 @@ class encoder(nn.Module):
 
     def __init__(self, patch_size=16, decode_embed=1000,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=False):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=False, num_branch=1):
 
         # Transformer
         super().__init__()
+        self.num_branch = num_branch
         self.decode_embed = decode_embed
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         assert depth % 3 == 0
 
-        num_patches = ((im_size // patch_size) ** 2) * 4
+        num_patches = ((im_size // patch_size) ** 2) * num_branch
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.trans_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -129,7 +130,7 @@ class encoder(nn.Module):
         self.mean_head = nn.Linear(embed_dim, decode_embed)
         self.var_head = nn.Linear(embed_dim, decode_embed) if use_vae else None
 
-        for i in range(4):
+        for i in range(num_branch):
             setattr(self, f"trans_patch_conv_{i}", nn.Conv2d(3, embed_dim, kernel_size=patch_size, stride=patch_size, padding=0))
 
 
@@ -140,7 +141,7 @@ class encoder(nn.Module):
         fin_stage = init_stage + depth
         for i in range(init_stage, fin_stage):
             self.add_module('trans_' + str(i),
-                    Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
+                    Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, num_branch=num_branch,
                              qk_scale=qk_scale, drop=drop_rate, attn_drop=attn_drop_rate, drop_path=self.trans_dpr[i-1])
             )
 
@@ -180,9 +181,9 @@ class encoder(nn.Module):
         
 
         # 1 stage
-        cpb = x.shape[1] // 4
+        cpb = x.shape[1] // self.num_branch
         x_t = []
-        for i in range(4):
+        for i in range(self.num_branch):
             x_t.append(getattr(self, f"trans_patch_conv_{i}")(x[:, i*cpb : i*cpb + cpb, :, :]).flatten(2).transpose(1, 2))
         x_t = torch.cat([cls_tokens] + x_t, dim=1)
 
@@ -210,14 +211,15 @@ class decoder(nn.Module):
 
     def __init__(self, patch_size=16, embed_dim=768,
                  depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, num_branch=1):
 
         # Transformer
         super().__init__()
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         assert depth % 3 == 0
+        self.num_branch = num_branch
 
-        num_patches = ((im_size // patch_size) ** 2) * 4
+        num_patches = ((im_size // patch_size) ** 2) * num_branch
         self.trans_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 
         self.patch_size = patch_size
@@ -235,7 +237,7 @@ class decoder(nn.Module):
 
 
         self.decoder_norm = nn.LayerNorm(embed_dim)
-        for i in range(4):
+        for i in range(num_branch):
             setattr(self, f"last_fc_{i}", nn.Linear(embed_dim, patch_size**2 * 3, bias=True))
 
 
@@ -283,8 +285,8 @@ class decoder(nn.Module):
         
         x = x[:, 1:]
         im = []
-        cpb = (x.shape[1]) // 4
-        for i in range(4):
+        cpb = (x.shape[1]) // self.num_branch
+        for i in range(self.num_branch):
             _x = getattr(self, f"last_fc_{i}")(x[:, i*cpb:i*cpb+cpb, :])
             im.append(self.unpatchify(_x))
         im = torch.cat(im, 1)
@@ -325,18 +327,18 @@ class auto_encoder_vit_share(nn.Module):
 
     def __init__(self, patch_size=16, in_chans=3, decode_embed=384,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=True, **kwargs):
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., im_size=224, use_vae=True, num_branch=1, **kwargs):
         
         super().__init__()
         
         self.encoder = encoder(patch_size=patch_size, decode_embed=decode_embed,  
                                embed_dim=embed_dim, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
-                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, use_vae=use_vae)
+                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, use_vae=use_vae, num_branch=num_branch)
         self.decoder = decoder(patch_size=patch_size, 
                               embed_dim=decode_embed, depth=depth, 
                                num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop_rate=drop_rate, 
-                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size)
+                               attn_drop_rate=attn_drop_rate, drop_path_rate=drop_path_rate, im_size=im_size, num_branch=num_branch)
 
     def sample(self, mu, log_var):
         if log_var is not None:

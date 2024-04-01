@@ -22,7 +22,7 @@ import utils
 import models
 import random
 from torchvision.utils import save_image
-from data import four_scale_dataset
+from data import four_scale_dataset, gs2_dataset
 
 # from fvcore.nn import FlopCountAnalysis
 
@@ -184,7 +184,7 @@ def main(args):
 
     cudnn.benchmark = True
 
-    dataset_train = four_scale_dataset(args.data_path, args.threshold, args.im_size)
+    dataset_train = gs2_dataset(args.data_path, args.threshold, args.im_size)
 
     if True:  # args.distributed:
         num_tasks = utils.get_world_size()
@@ -231,11 +231,11 @@ def main(args):
         if hasattr(model, "encoder"):
             print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)}")
         else:
-            print(f"Number of encoder parameters: {sum(p.numel() for i in range(4) for p in getattr(model, f'encoder_{i}').parameters()  if p.requires_grad)}")
+            print(f"Number of encoder parameters: {sum(p.numel() for i in range(model.num_branch) for p in getattr(model, f'encoder_{i}').parameters()  if p.requires_grad)}")
         if hasattr(model, "decoder"):
             print(f"Number of decoder parameters: {sum(p.numel() for p in model.decoder.parameters() if p.requires_grad)}")
         else:
-            print(f"Number of encoder parameters: {sum(p.numel() for i in range(4) for p in getattr(model, f'decoder_{i}').parameters()  if p.requires_grad)}")         
+            print(f"Number of encoder parameters: {sum(p.numel() for i in range(model.num_branch) for p in getattr(model, f'decoder_{i}').parameters()  if p.requires_grad)}")         
 
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
 
