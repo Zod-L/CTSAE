@@ -1,4 +1,4 @@
-name: huggin_face
+name: ctsae
 channels:
   - pytorch
   - nvidia

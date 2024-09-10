@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 # Train
-export CUDA_VISIBLE_DEVICES=1,2,6,7
+export CUDA_VISIBLE_DEVICES=0
 
-python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_node=4 --use_env train.py \
+python -W ignore -m torch.distributed.launch --master_port 50130 --nproc_per_node=1 --use_env train.py \
                                    --model cnn_share_attn \
                                    --im-size 224 \
                                    --data-set IMNET \

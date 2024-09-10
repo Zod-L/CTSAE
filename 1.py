@@ -1,19 +1,28 @@
-from models import auto_encoder_no_comm_224
-import torch
-import os
-import shutil
-import random
-import pickle
-from data import four_scale_dataset
-import numpy as np
+from pathlib import Path
+
+# prefix components:
+space =  '    '
+branch = '│   '
+# pointers:
+tee =    '├── '
+last =   '└── '
 
 
+def tree(dir_path: Path, prefix: str=''):
+    """A recursive generator, given a directory Path object
+    will yield a visual tree structure line by line
+    with each line prefixed by the same characters
+    """    
+    contents = list(dir_path.iterdir())
+    # contents each get pointers that are ├── with a final └── :
+    pointers = [tee] * (len(contents) - 1) + [last]
+    for pointer, path in zip(pointers, contents):
+        yield prefix + pointer + path.name
+        if path.is_dir(): # extend the prefix and recurse:
+            extension = branch if pointer == tee else space 
+            # i.e. space because last, └── , above so no more |
+            yield from tree(path, prefix=prefix+extension)
 
-for root, _, fnames in os.walk("/data/otn7723/gs_2.0/"):
-    for fname in fnames:
-        if ".gz" in fname:
-            print(os.path.join(root, fname))
-            print(os.path.join(root, fname.replace(".gz", "")))
-            print()
-            shutil.move(os.path.join(root, fname), os.path.join(root, fname.replace(".gz", "")))
-            
+
+for line in tree(Path("./")):
+    print(line)
